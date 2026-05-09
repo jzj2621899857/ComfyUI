@@ -6,6 +6,9 @@
 from .tracer import ExecutionTracer, tracer
 from .profiler import PerformanceProfiler, profiler
 from .logger import StructuredLogger, logger
+from .recorder import ExecutionRecorder, recorder, TensorSnapshot
+from .telemetry import Telemetry, telemetry, Tracer, MetricsCollector
+from .dashboard import MonitoringDashboard, dashboard
 
 __all__ = [
     "ExecutionTracer",
@@ -14,4 +17,13 @@ __all__ = [
     "profiler",
     "StructuredLogger",
     "logger",
+    "ExecutionRecorder",
+    "recorder",
+    "TensorSnapshot",
+    "Telemetry",
+    "telemetry",
+    "Tracer",
+    "MetricsCollector",
+    "MonitoringDashboard",
+    "dashboard",
 ]

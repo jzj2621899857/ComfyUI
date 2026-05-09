@@ -10,6 +10,17 @@ from .validators import (
     TypeValidator, ValueValidator, TensorValidator, InputValidator,
     input_validator
 )
+from .node_registry import (
+    NodeContractExtractor,
+    HarnessNodeMixin,
+    auto_register_nodes,
+    register_standard_comfyui_contracts,
+    validate_node_inputs,
+    validate_connection,
+    get_node_contract,
+    list_registered_nodes,
+    with_harness_contract
+)
 
 __all__ = [
     "PortContract",
@@ -24,4 +35,13 @@ __all__ = [
     "TensorValidator",
     "InputValidator",
     "input_validator",
+    "NodeContractExtractor",
+    "HarnessNodeMixin",
+    "auto_register_nodes",
+    "register_standard_comfyui_contracts",
+    "validate_node_inputs",
+    "validate_connection",
+    "get_node_contract",
+    "list_registered_nodes",
+    "with_harness_contract",
 ]

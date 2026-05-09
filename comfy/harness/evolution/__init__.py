@@ -7,6 +7,7 @@ from .workflow_version import WorkflowVersionManager, version_manager, WorkflowV
 from .canary_deployer import CanaryDeployer, canary_deployer, CanaryConfig, CanaryStatus
 from .referee import AIReferee, referee, QualityScore, ComparisonResult
 from .optimizer import ClosedLoopOptimizer, WorkflowOptimizer, optimizer, workflow_optimizer, HyperParameter, OptimizationConfig
+from .api_integration import HarnessAPI, api, register_harness_routes
 
 __all__ = [
     "WorkflowVersionManager",
@@ -26,4 +27,7 @@ __all__ = [
     "workflow_optimizer",
     "HyperParameter",
     "OptimizationConfig",
+    "HarnessAPI",
+    "api",
+    "register_harness_routes",
 ]

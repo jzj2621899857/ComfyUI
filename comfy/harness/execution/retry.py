@@ -8,11 +8,18 @@ import asyncio
 import logging
 import time
 from typing import Any, Callable, Optional, Tuple
-import torch
+import functools
 
 from ..config import RetryConfig
 
 logger = logging.getLogger(__name__)
+
+try:
+    import torch
+    _torch_available = True
+except ImportError:
+    torch = None
+    _torch_available = False
 
 
 class RetryHandler:
@@ -151,6 +158,9 @@ class RetryHandler:
     
     def _try_free_memory(self):
         """尝试释放显存"""
+        if not _torch_available:
+            return
+        
         try:
             if torch.cuda.is_available():
                 # 清理 CUDA 缓存

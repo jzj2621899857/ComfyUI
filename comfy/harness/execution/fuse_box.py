@@ -5,14 +5,26 @@ Fuse Box 模式 - 输入校验层
 """
 
 import logging
-import torch
-import numpy as np
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from ..config import FuseBoxConfig
 
 logger = logging.getLogger(__name__)
+
+try:
+    import torch
+    _torch_available = True
+except ImportError:
+    torch = None
+    _torch_available = False
+
+try:
+    import numpy as np
+    _numpy_available = True
+except ImportError:
+    np = None
+    _numpy_available = False
 
 
 @dataclass
@@ -80,7 +92,7 @@ class FuseBoxValidator:
             warnings.extend(type_result.warning_messages)
             
             # 2. Tensor 专项校验
-            if isinstance(input_value, torch.Tensor):
+            if _torch_available and isinstance(input_value, torch.Tensor):
                 tensor_result = self._validate_tensor(input_name, input_value, input_specs)
                 if not tensor_result.is_valid:
                     self._validation_stats["failed_validations"] += 1
@@ -111,13 +123,14 @@ class FuseBoxValidator:
                 error_message=f"输入 '{input_name}' 为 None"
             )
         
-        # 检查是否为支持的类型
-        supported_types = (
-            torch.Tensor, np.ndarray, int, float, str, bool,
-            list, tuple, dict
-        )
+        # 动态构建支持的类型列表
+        supported_types = [int, float, str, bool, list, tuple, dict]
+        if _torch_available:
+            supported_types.append(torch.Tensor)
+        if _numpy_available:
+            supported_types.append(np.ndarray)
         
-        if not isinstance(input_value, supported_types):
+        if not isinstance(input_value, tuple(supported_types)):
             return ValidationResult(
                 is_valid=False,
                 error_message=f"输入 '{input_name}' 类型不支持: {type(input_value)}"
@@ -232,7 +245,7 @@ class FuseBoxValidator:
         """校验数值范围"""
         warnings = []
         
-        if isinstance(input_value, torch.Tensor):
+        if _torch_available and isinstance(input_value, torch.Tensor):
             # 检查数值范围（针对图像类数据）
             if input_value.dtype in [torch.float32, torch.float16, torch.bfloat16]:
                 min_val = input_value.min().item()
@@ -247,16 +260,28 @@ class FuseBoxValidator:
         elif isinstance(input_value, (int, float)):
             # 检查数值是否异常
             if isinstance(input_value, float):
-                if np.isnan(input_value):
-                    return ValidationResult(
-                        is_valid=False,
-                        error_message=f"输入 '{input_name}' 为 NaN"
-                    )
-                if np.isinf(input_value):
-                    return ValidationResult(
-                        is_valid=False,
-                        error_message=f"输入 '{input_name}' 为 Inf"
-                    )
+                if _numpy_available:
+                    if np.isnan(input_value):
+                        return ValidationResult(
+                            is_valid=False,
+                            error_message=f"输入 '{input_name}' 为 NaN"
+                        )
+                    if np.isinf(input_value):
+                        return ValidationResult(
+                            is_valid=False,
+                            error_message=f"输入 '{input_name}' 为 Inf"
+                        )
+                else:
+                    if input_value != input_value:  # NaN check without numpy
+                        return ValidationResult(
+                            is_valid=False,
+                            error_message=f"输入 '{input_name}' 为 NaN"
+                        )
+                    if abs(input_value) == float('inf'):
+                        return ValidationResult(
+                            is_valid=False,
+                            error_message=f"输入 '{input_name}' 为 Inf"
+                        )
         
         return ValidationResult(is_valid=True, warning_messages=warnings)
     

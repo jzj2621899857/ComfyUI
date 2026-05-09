@@ -63,8 +63,8 @@ class FallbackHandler:
     管理节点失败时的 fallback 决策
     """
     
-    # 非关键节点类型列表（这些节点失败时可以旁路）
-    NON_CRITICAL_NODE_TYPES = {
+    # 默认非关键节点类型列表（这些节点失败时可以旁路）
+    _DEFAULT_NON_CRITICAL_NODE_TYPES = {
         "PreviewImage",
         "SaveImage",
         "SaveVideo",
@@ -82,6 +82,8 @@ class FallbackHandler:
         self.config = config
         self._fallback_history = []
         self._max_history = 1000
+        # 使用实例级别的集合，避免测试间相互影响
+        self.NON_CRITICAL_NODE_TYPES = set(self._DEFAULT_NON_CRITICAL_NODE_TYPES)
     
     def should_fallback(
         self, 
@@ -261,9 +263,11 @@ class FallbackHandler:
         """
         if optional:
             if node_type not in self.NON_CRITICAL_NODE_TYPES:
+                self.NON_CRITICAL_NODE_TYPES.add(node_type)
                 logger.info(f"[Fallback] 将节点类型 '{node_type}' 添加到可选列表")
         else:
             if node_type in self.NON_CRITICAL_NODE_TYPES:
+                self.NON_CRITICAL_NODE_TYPES.remove(node_type)
                 logger.info(f"[Fallback] 将节点类型 '{node_type}' 从可选列表移除")
     
     def register_critical_node(self, node_type: str):

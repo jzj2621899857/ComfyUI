@@ -70,6 +70,9 @@
 - [x] comfy/harness/__init__.py - 模块入口
 - [x] comfy/harness/config.py - 配置管理
 
+### 文档
+- [x] comfy/harness/README.md - 完整部署使用文档
+
 ## ✅ 测试覆盖统计
 
 | 模块 | 文件数 | 测试数 | 状态 |
@@ -110,6 +113,7 @@
 - [x] 类型注册表
 - [x] 连接验证
 - [x] 图编译器
+- [x] 节点合约自动注册
 
 ### 可观测性
 - [x] 执行追踪
@@ -118,6 +122,7 @@
 - [x] 黑匣子记录
 - [x] OpenTelemetry 埋点
 - [x] 监控看板
+- [x] 可观测性钩子
 
 ### 资源管理
 - [x] 显存监控
@@ -126,6 +131,7 @@
 - [x] 动态调度
 - [x] 精度自适应
 - [x] 显存池
+- [x] 资源管理钩子
 
 ### 自进化
 - [x] 版本管理
@@ -136,5 +142,29 @@
 
 ---
 
+## 📋 SPEC 需求完成对照表
+
+| Spec 要求 | 实现文件 | 完成状态 |
+|----------|---------|---------|
+| **2.1 Fuse Box 模式** | `execution/fuse_box.py` | ✅ |
+| **2.1 Fallback 机制** | `execution/fallback.py` | ✅ |
+| **2.1 Retry with Backoff** | `execution/retry.py` | ✅ |
+| **2.2 强类型接口** | `types/contracts.py` | ✅ |
+| **2.2 静态类型检查** | `types/compiler.py` | ✅ |
+| **2.2 类型注册表** | `types/registry.py` | ✅ |
+| **2.3 Tracing 层** | `observability/tracer.py` | ✅ |
+| **2.3 执行轨迹** | `observability/recorder.py` | ✅ |
+| **2.3 OpenTelemetry** | `observability/telemetry.py` | ✅ |
+| **2.4 资源预估** | `resources/estimator.py` | ✅ |
+| **2.4 动态调度** | `resources/scheduler.py` | ✅ |
+| **2.4 精度自适应** | `resources/adaptive_precision.py` | ✅ |
+| **2.5 版本管理** | `evolution/workflow_version.py` | ✅ |
+| **2.5 金丝雀部署** | `evolution/canary_deployer.py` | ✅ |
+| **2.5 AI 裁判评分** | `evolution/referee.py` | ✅ |
+| **2.5 闭环进化** | `evolution/optimizer.py` | ✅ |
+
+---
+
 **最后更新**: 2026-05-09
 **状态**: ✅ 全部完成 (71/71 tests passed)
+**文档**: `comfy/harness/README.md`

@@ -31,9 +31,18 @@ chmod +x harness-deploy.sh
 
 ### 1.4 启动服务
 
+**方式一：使用 Harness 启动脚本（推荐，完全解耦）**
+
 ```bash
 source venv/bin/activate
-python main.py
+python start_with_harness.py --listen 0.0.0.0 --port 8188
+```
+
+**方式二：传统方式（如需禁用 Harness）**
+
+```bash
+source venv/bin/activate
+python main.py --listen 0.0.0.0 --port 8188
 ```
 
 ---

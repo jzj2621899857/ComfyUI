@@ -3,109 +3,109 @@
 ComfyUI Harness 启动脚本
 
 完全解耦，不修改任何 ComfyUI 原有文件
-通过 monkey-patch 动态注入 Harness 功能
+通过 subprocess 启动并注入 Harness 功能
 """
 
 import os
 import sys
-import asyncio
+import subprocess
 import logging
-import importlib.util
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 os.environ.setdefault("COMFYUI_HARNESS", "true")
 
+logger.info("[Harness] Starting ComfyUI with Harness extensions...")
 
-def register_harness_routes_dynamically():
-    """动态注册 Harness 路由到服务器"""
+def patch_server_after_start():
+    """在服务器启动后尝试动态注册路由"""
     try:
-        from comfy.harness.evolution.api_integration import register_harness_routes
-        return register_harness_routes
-    except ImportError as e:
-        logger.warning(f"[Harness] Failed to import API integration: {e}")
-        return None
-
-
-def patch_prompt_server():
-    """Monkey-patch PromptServer 以动态注册 Harness 路由"""
-    import server
-    
-    original_init = server.PromptServer.__init__
-    
-    def patched_init(self, *args, **kwargs):
-        original_init(self, *args, **kwargs)
+        import time
+        import requests
+        import asyncio
         
-        register_func = register_harness_routes_dynamically()
-        if register_func and hasattr(self, 'app'):
+        max_retries = 30
+        for i in range(max_retries):
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(_register_routes_async(self.app))
-                else:
-                    loop.run_until_complete(_register_routes_async(self.app))
-            except Exception as e:
-                logger.warning(f"[Harness] Failed to register routes: {e}")
-    
-    async def _register_routes_async(app):
-        try:
-            from comfy.harness.evolution.api_integration import HarnessAPI
-            api = HarnessAPI(app)
+                response = requests.get("http://localhost:8188", timeout=2)
+                if response.status_code in (200, 404):
+                    logger.info("[Harness] Server is up, registering routes...")
+                    
+                    from comfy.harness.evolution.api_integration import HarnessAPI
+                    from aiohttp import web
+                    import server
+                    
+                    app = server.prompt_server.app
+                    api = HarnessAPI(app)
+                    
+                    routes = {
+                        "/harness": {"method": "GET", "handler": api.handle_dashboard},
+                        "/api/harness/status": {"method": "GET", "handler": api.handle_status},
+                        "/api/harness/metrics": {"method": "GET", "handler": api.handle_metrics},
+                        "/api/harness/traces": {"method": "GET", "handler": api.handle_traces},
+                        "/api/harness/version/list": {"method": "GET", "handler": api.handle_version_list},
+                        "/api/harness/canary/start": {"method": "POST", "handler": api.handle_canary_start},
+                        "/api/harness/canary/stop": {"method": "POST", "handler": api.handle_canary_stop},
+                        "/api/harness/referee/judge": {"method": "POST", "handler": api.handle_referee_judge},
+                        "/api/harness/optimizer/step": {"method": "POST", "handler": api.handle_optimizer_step},
+                        "/api/harness/enable": {"method": "POST", "handler": api.handle_enable},
+                        "/api/harness/disable": {"method": "POST", "handler": api.handle_disable},
+                    }
+                    
+                    for path, route_info in routes.items():
+                        method = route_info["method"]
+                        handler_func = route_info["handler"]
+                        
+                        async def make_handler(func=handler_func):
+                            async def handler(request):
+                                try:
+                                    result = await func(request)
+                                    if isinstance(result, web.Response):
+                                        return result
+                                    return web.json_response(result)
+                                except Exception as e:
+                                    logger.error(f"[Harness] Handler error: {e}")
+                                    return web.json_response({"status": "error", "message": str(e)}, status=500)
+                            return handler
+                        
+                        app.router.add_route(method, path, make_handler())
+                        logger.info(f"[Harness] Registered route: {method} {path}")
+                    
+                    logger.info("[Harness] All routes registered successfully!")
+                    return
+                    
+            except Exception:
+                pass
             
-            routes = {
-                "/harness": {"method": "GET", "handler": api.handle_dashboard},
-                "/api/harness/status": {"method": "GET", "handler": api.handle_status},
-                "/api/harness/metrics": {"method": "GET", "handler": api.handle_metrics},
-                "/api/harness/traces": {"method": "GET", "handler": api.handle_traces},
-                "/api/harness/version/list": {"method": "GET", "handler": api.handle_version_list},
-                "/api/harness/canary/start": {"method": "POST", "handler": api.handle_canary_start},
-                "/api/harness/canary/stop": {"method": "POST", "handler": api.handle_canary_stop},
-                "/api/harness/referee/judge": {"method": "POST", "handler": api.handle_referee_judge},
-                "/api/harness/optimizer/step": {"method": "POST", "handler": api.handle_optimizer_step},
-                "/api/harness/enable": {"method": "POST", "handler": api.handle_enable},
-                "/api/harness/disable": {"method": "POST", "handler": api.handle_disable},
-            }
-            
-            from aiohttp import web
-            for path, route_info in routes.items():
-                method = route_info["method"]
-                handler_func = route_info["handler"]
-                
-                async def make_handler(func=handler_func):
-                    async def handler(request):
-                        try:
-                            result = await func(request)
-                            if isinstance(result, web.Response):
-                                return result
-                            return web.json_response(result)
-                        except Exception as e:
-                            logger.error(f"[Harness] Handler error: {e}")
-                            return web.json_response({"status": "error", "message": str(e)}, status=500)
-                    return handler
-                
-                app.router.add_route(method, path, make_handler())
-                logger.info(f"[Harness] Registered route: {method} {path}")
-            
-            logger.info("[Harness] All routes registered successfully")
-        except Exception as e:
-            logger.warning(f"[Harness] Failed to register routes: {e}")
-    
-    server.PromptServer.__init__ = patched_init
-    logger.info("[Harness] PromptServer patched successfully")
+            time.sleep(1)
+            if i % 5 == 0:
+                logger.info(f"[Harness] Waiting for server to start... ({i+1}/{max_retries})")
+        
+        logger.warning("[Harness] Server did not start in time, routes not registered")
+        
+    except Exception as e:
+        logger.warning(f"[Harness] Failed to register routes: {e}")
 
 
 def main():
-    """主入口"""
-    logger.info("[Harness] Starting ComfyUI with Harness extensions...")
+    """主入口 - 使用 subprocess 启动 ComfyUI"""
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
     
-    patch_prompt_server()
+    cmd = [sys.executable, script_path] + sys.argv[1:]
     
-    sys.argv = [sys.argv[0]] + sys.argv[1:]
+    logger.info(f"[Harness] Running: {' '.join(cmd)}")
     
-    if __name__ == "__main__":
-        from main import main as comfyui_main
-        comfyui_main()
+    try:
+        process = subprocess.Popen(cmd)
+        
+        patch_server_after_start()
+        
+        process.wait()
+    except KeyboardInterrupt:
+        logger.info("[Harness] Shutting down...")
+        process.terminate()
+        process.wait()
 
 
 if __name__ == "__main__":

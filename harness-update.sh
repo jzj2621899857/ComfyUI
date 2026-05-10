@@ -41,15 +41,23 @@ if [ -n "$(git status --porcelain)" ]; then
     STASHED=true
 fi
 
-log_info "Fetching latest changes..."
-git fetch origin
-
-log_info "Pulling main branch..."
-git pull origin main
+log_info "Checking for git repository..."
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    log_info "Git repository detected. Pulling latest changes..."
+    git fetch origin
+    git pull origin main
+else
+    log_info "No git repository detected. Skipping git pull."
+    log_warn "If you're uploading new code, please re-run harness-deploy.sh after uploading."
+fi
 
 if [ "$STASHED" = true ]; then
-    log_info "Restoring your changes..."
-    git stash pop || true
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        log_info "Restoring your changes..."
+        git stash pop || true
+    else
+        log_warn "Cannot restore stashed changes without git repository"
+    fi
 fi
 
 log_info "Activating virtual environment..."

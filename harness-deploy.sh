@@ -38,8 +38,13 @@ check_command pip3
 log_info "Checking Python version..."
 python3 --version
 
-log_info "Updating git repository..."
-git pull origin main
+log_info "Checking for git repository..."
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    log_info "Git repository detected. Pulling latest changes..."
+    git pull origin main
+else
+    log_info "No git repository detected. Using local files directly."
+fi
 
 log_info "Creating virtual environment..."
 if [ ! -d "venv" ]; then

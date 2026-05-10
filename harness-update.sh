@@ -178,7 +178,15 @@ fi
 
 log_info "Running database migrations..."
 if [ -f "alembic.ini" ]; then
-    alembic upgrade head
+    DB_PATH=$(grep "sqlalchemy.url" alembic.ini | sed 's/.*sqlite:\/\/\///')
+    if [ -n "$DB_PATH" ] && [ "$DB_PATH" != "$DB_PATH/*" ]; then
+        DB_DIR=$(dirname "$DB_PATH")
+        if [ "$DB_DIR" != "." ] && [ ! -d "$DB_DIR" ]; then
+            log_info "创建数据库目录: $DB_DIR"
+            mkdir -p "$DB_DIR"
+        fi
+    fi
+    alembic upgrade head || log_warn "数据库迁移失败，可能不影响运行"
 fi
 
 log_info "Update complete!"

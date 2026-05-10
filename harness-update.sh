@@ -129,8 +129,9 @@ fi
 log_info "Checking for git repository..."
 if git rev-parse --git-dir > /dev/null 2>&1; then
     log_info "Git repository detected. Pulling latest changes..."
-    git fetch origin
-    git pull origin main
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+    DEFAULT_BRANCH=${DEFAULT_BRANCH:-master}
+    git pull origin "$DEFAULT_BRANCH" || log_warn "Failed to pull, will use local files"
 else
     log_info "No git repository detected. Skipping git pull."
     log_warn "If you're uploading new code, please re-run harness-deploy.sh after uploading."

@@ -46,7 +46,9 @@ git checkout master
 
 # 拉取你自己的最新代码
 log_info "拉取你的仓库最新代码..."
-git pull origin master --no-edit || log_warn "origin 拉取失败或没有更新"
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-master}
+git pull origin "$DEFAULT_BRANCH" --no-edit || log_warn "origin 拉取失败或没有更新"
 
 # 获取官方最新代码
 log_info "获取官方 ComfyUI 最新代码..."

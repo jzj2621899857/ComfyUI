@@ -39,6 +39,13 @@ from app.assets.api.routes import register_assets_routes
 from app.assets.services.ingest import register_file_in_place
 from app.assets.services.asset_management import resolve_hash_to_path
 
+# Harness API
+try:
+    from comfy.harness.evolution.api_integration import register_harness_routes
+    HARNESS_AVAILABLE = True
+except ImportError:
+    HARNESS_AVAILABLE = False
+
 from app.user_manager import UserManager
 from app.model_manager import ModelFileManager
 from app.custom_node_manager import CustomNodeManager
@@ -247,6 +254,15 @@ class PromptServer():
         else:
             register_assets_routes(self.app)
             asset_seeder.disable()
+        
+        # 注册 Harness API 路由
+        if HARNESS_AVAILABLE:
+            try:
+                register_harness_routes(self.app)
+                logging.info("[Harness] API routes registered")
+            except Exception as e:
+                logging.warning(f"[Harness] Failed to register routes: {e}")
+        
         routes = web.RouteTableDef()
         self.routes = routes
         self.last_node_id = None

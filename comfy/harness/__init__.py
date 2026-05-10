@@ -113,9 +113,45 @@ def is_enabled(module: str = None) -> bool:
     return HARNESS_CONFIG.get(module, {}).get("enabled", False)
 
 
+def fuse_box_enabled() -> bool:
+    """检查 Fuse Box 是否启用"""
+    return HARNESS_CONFIG["execution"]["fuse_box"]
+
+
+def fallback_enabled() -> bool:
+    """检查 Fallback 是否启用"""
+    return HARNESS_CONFIG["execution"]["fallback"]
+
+
+def retry_enabled() -> bool:
+    """检查 Retry 是否启用"""
+    return HARNESS_CONFIG["execution"]["retry"]
+
+
+def observability_enabled() -> bool:
+    """检查可观测性是否启用"""
+    return HARNESS_CONFIG["observability"]["enabled"]
+
+
+def resource_management_enabled() -> bool:
+    """检查资源管理是否启用"""
+    return HARNESS_CONFIG["resource"]["enabled"]
+
+
+def evolution_enabled() -> bool:
+    """检查自进化系统是否启用"""
+    return HARNESS_CONFIG["evolution"]["enabled"]
+
+
 __all__ = [
     "HARNESS_ENABLED",
     "HARNESS_CONFIG",
     "setup_harness",
     "is_enabled",
+    "fuse_box_enabled",
+    "fallback_enabled",
+    "retry_enabled",
+    "observability_enabled",
+    "resource_management_enabled",
+    "evolution_enabled",
 ]

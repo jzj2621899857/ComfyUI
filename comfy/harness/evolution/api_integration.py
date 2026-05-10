@@ -289,21 +289,18 @@ def register_harness_routes(app):
         api = HarnessAPI(app)
         
         for path, route_info in api.get_routes().items():
-            async def make_handler(path=path, route_info=route_info):
+            method = route_info.get("method", "GET")
+            handler_func = route_info.get("handler")
+            
+            async def make_handler(handler_func=handler_func):
                 async def handler(request):
-                    method = route_info.get("method", "GET")
-                    handler_func = route_info.get("handler")
-                    
-                    if request.method != method:
-                        return {"status": "error", "message": f"Method {method} required"}
-                    
                     result = await handler_func(request)
-                    return result
+                    return web.json_response(result)
                 
                 return handler
             
-            app.router.add_route("GET", path, make_handler())
-            logger.info(f"注册 Harness 路由: {path}")
+            app.router.add_route(method, path, make_handler())
+            logger.info(f"注册 Harness 路由: {method} {path}")
         
         logger.info("Harness API 路由注册完成")
     except Exception as e:

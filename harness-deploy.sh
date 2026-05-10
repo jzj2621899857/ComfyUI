@@ -26,6 +26,20 @@ check_command() {
     fi
 }
 
+find_pip() {
+    if command -v pip3 &> /dev/null; then
+        echo "pip3"
+    elif command -v pip &> /dev/null; then
+        echo "pip"
+    elif python3 -m pip --version &> /dev/null; then
+        echo "python3 -m pip"
+    else
+        log_error "pip not found. Please install python3-pip first."
+        log_info "Try: sudo apt install python3-pip"
+        exit 1
+    fi
+}
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
@@ -33,7 +47,17 @@ log_info "Starting deployment in $PROJECT_DIR"
 
 check_command git
 check_command python3
-check_command pip3
+
+PIP_CMD=$(find_pip)
+log_info "Using pip: $PIP_CMD"
+
+run_pip() {
+    if [ "$PIP_CMD" = "python3 -m pip" ]; then
+        python3 -m pip "$@"
+    else
+        $PIP_CMD "$@"
+    fi
+}
 
 log_info "Checking Python version..."
 python3 --version
@@ -54,15 +78,15 @@ fi
 source venv/bin/activate
 
 log_info "Upgrading pip..."
-pip install --upgrade pip
+run_pip install --upgrade pip
 
 log_info "Installing requirements..."
 if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
+    run_pip install -r requirements.txt
 fi
 
 if [ -f "manager_requirements.txt" ]; then
-    pip install -r manager_requirements.txt
+    run_pip install -r manager_requirements.txt
 fi
 
 log_info "Checking for custom nodes dependencies..."
@@ -70,7 +94,7 @@ if [ -d "custom_nodes" ]; then
     for node_dir in custom_nodes/*/; do
         if [ -f "$node_dir/requirements.txt" ]; then
             log_info "Installing requirements for $(basename "$node_dir")..."
-            pip install -r "$node_dir/requirements.txt"
+            run_pip install -r "$node_dir/requirements.txt"
         fi
     done
 fi

@@ -138,7 +138,30 @@ fi
 
 log_info "Creating virtual environment..."
 if [ ! -d "venv" ]; then
-    python3 -m venv venv
+    if python3 -m venv venv 2>/dev/null; then
+        log_info "虚拟环境创建成功"
+    else
+        log_warn "虚拟环境创建失败，尝试安装 python3-venv..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y python3-venv python3-full
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y python3-virtualenv
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y python3-virtualenv
+        fi
+        
+        if python3 -m venv venv 2>/dev/null; then
+            log_info "虚拟环境创建成功"
+        else
+            log_error "虚拟环境创建失败，请手动执行: sudo apt-get install python3-venv python3-full"
+            exit 1
+        fi
+    fi
+fi
+
+if [ ! -f "venv/bin/activate" ]; then
+    log_error "虚拟环境损坏，请删除后重试: rm -rf venv"
+    exit 1
 fi
 
 source venv/bin/activate

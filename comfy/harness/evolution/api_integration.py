@@ -8,6 +8,8 @@ import logging
 from typing import Any, Dict, List, Optional
 import json
 
+from aiohttp import web
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,11 @@ class HarnessAPI:
     def _get_routes(self) -> Dict[str, Dict]:
         """获取路由定义"""
         return {
+            "/harness": {
+                "method": "GET",
+                "handler": self.handle_dashboard,
+                "description": "Harness 控制面板"
+            },
             "/api/harness/status": {
                 "method": "GET",
                 "handler": self.handle_status,
@@ -74,6 +81,15 @@ class HarnessAPI:
                 "description": "获取金丝雀状态"
             },
         }
+    
+    async def handle_dashboard(self, request) -> str:
+        """返回 Harness 控制面板 HTML"""
+        try:
+            from ..observability.dashboard import generate_dashboard_html
+            html = generate_dashboard_html()
+            return web.Response(text=html, content_type='text/html')
+        except ImportError as e:
+            return web.Response(text=f"<html><body>Error: {e}</body></html>", content_type='text/html')
     
     async def handle_status(self, request) -> Dict[str, Any]:
         """获取 Harness 状态"""
@@ -294,6 +310,8 @@ def register_harness_routes(app):
             
             async def handler(request, func=handler_func):
                 result = await func(request)
+                if isinstance(result, web.Response):
+                    return result
                 return web.json_response(result)
             
             app.router.add_route(method, path, handler)

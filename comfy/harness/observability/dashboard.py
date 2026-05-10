@@ -1,7 +1,5 @@
 """
-监控看板
-
-提供实时性能监控和可视化数据
+Harness 前端控制面板
 """
 
 import json
@@ -12,7 +10,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class DashboardMetric:
-    """看板指标"""
     name: str
     value: float
     unit: str = ""
@@ -25,291 +22,365 @@ class DashboardMetric:
     
     @property
     def is_alert(self) -> bool:
-        """是否触发告警"""
         if self.threshold is None:
             return False
         return self.value >= self.threshold
 
 
-@dataclass
-class DashboardPanel:
-    """看板面板"""
-    title: str
-    metrics: List[DashboardMetric] = field(default_factory=list)
-    chart_type: str = "line"  # line, bar, gauge
-    refresh_interval: float = 5.0
-    
-    def add_metric(self, metric: DashboardMetric):
-        """添加指标"""
-        self.metrics.append(metric)
-        # 保留最近 100 个数据点
-        if len(self.metrics) > 100:
-            self.metrics = self.metrics[-100:]
-    
-    def get_latest(self) -> Optional[DashboardMetric]:
-        """获取最新指标"""
-        if not self.metrics:
-            return None
-        return self.metrics[-1]
-    
-    def get_average(self) -> float:
-        """获取平均值"""
-        if not self.metrics:
-            return 0.0
-        return sum(m.value for m in self.metrics) / len(self.metrics)
-
-
 class MonitoringDashboard:
-    """
-    监控看板
-    
-    提供实时性能监控和可视化数据
-    """
-    
     _instance = None
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._enabled = False
-            cls._instance._panels: Dict[str, DashboardPanel] = {}
-            cls._instance._alerts: List[Dict] = []
-            cls._instance._max_alerts = 100
+            cls._instance._panels: Dict[str, Any] = {}
+            cls._instance._alerts = []
         return cls._instance
     
     def enable(self):
-        """启用看板"""
         self._enabled = True
     
     def disable(self):
-        """禁用看板"""
         self._enabled = False
     
     def is_enabled(self) -> bool:
-        """检查是否启用"""
         return self._enabled
     
-    def create_panel(self, panel_id: str, title: str, chart_type: str = "line") -> DashboardPanel:
-        """创建面板"""
-        panel = DashboardPanel(title=title, chart_type=chart_type)
-        self._panels[panel_id] = panel
-        return panel
+    def update_metric(self, panel_id: str, metric_name: str, value: float, unit: str = "", threshold: float = None):
+        if panel_id not in self._panels:
+            self._panels[panel_id] = {
+                "title": panel_id.replace("_", " ").title(),
+                "metrics": [],
+                "chart_type": "line"
+            }
+        
+        metric = {
+            "name": metric_name,
+            "value": value,
+            "unit": unit,
+            "timestamp": time.time(),
+            "threshold": threshold,
+            "is_alert": threshold is not None and value >= threshold
+        }
+        
+        self._panels[panel_id]["metrics"].append(metric)
+        if len(self._panels[panel_id]["metrics"]) > 100:
+            self._panels[panel_id]["metrics"] = self._panels[panel_id]["metrics"][-100:]
     
-    def get_panel(self, panel_id: str) -> Optional[DashboardPanel]:
-        """获取面板"""
+    def get_panel(self, panel_id: str) -> Optional[Dict]:
         return self._panels.get(panel_id)
     
-    def update_metric(self, panel_id: str, metric_name: str, value: float, unit: str = "", threshold: Optional[float] = None):
-        """更新指标"""
-        if not self._enabled:
-            return
-        
-        if panel_id not in self._panels:
-            return
-        
-        metric = DashboardMetric(
-            name=metric_name,
-            value=value,
-            unit=unit,
-            threshold=threshold
-        )
-        
-        self._panels[panel_id].add_metric(metric)
-        
-        # 检查告警
-        if metric.is_alert:
-            self._add_alert(panel_id, metric)
+    def get_all_panels(self) -> Dict:
+        return self._panels
     
-    def _add_alert(self, panel_id: str, metric: DashboardMetric):
-        """添加告警"""
-        alert = {
-            "panel_id": panel_id,
-            "metric_name": metric.name,
-            "value": metric.value,
-            "threshold": metric.threshold,
-            "timestamp": metric.timestamp,
-            "message": f"{metric.name} 超过阈值: {metric.value:.2f} >= {metric.threshold:.2f}"
-        }
-        
-        self._alerts.append(alert)
-        
-        # 限制告警数量
-        if len(self._alerts) > self._max_alerts:
-            self._alerts = self._alerts[-self._max_alerts:]
+    def get_alerts(self) -> List[Dict]:
+        alerts = []
+        for panel_id, panel in self._panels.items():
+            for metric in panel.get("metrics", []):
+                if metric.get("is_alert"):
+                    alerts.append({
+                        "panel": panel.get("title", panel_id),
+                        "metric": metric.get("name"),
+                        "value": metric.get("value"),
+                        "unit": metric.get("unit"),
+                        "timestamp": metric.get("timestamp")
+                    })
+        return alerts[:100]
+
+
+def generate_dashboard_html() -> str:
+    """生成仪表盘 HTML"""
+    dashboard = MonitoringDashboard()
     
-    def get_alerts(self, limit: int = 10) -> List[Dict]:
-        """获取告警"""
-        return self._alerts[-limit:]
-    
-    def clear_alerts(self):
-        """清空告警"""
-        self._alerts.clear()
-    
-    def get_dashboard_data(self) -> Dict[str, Any]:
-        """获取看板数据"""
-        return {
-            "enabled": self._enabled,
-            "timestamp": time.time(),
-            "panels": {
-                panel_id: {
-                    "title": panel.title,
-                    "chart_type": panel.chart_type,
-                    "latest": {
-                        "name": panel.get_latest().name if panel.get_latest() else None,
-                        "value": panel.get_latest().value if panel.get_latest() else None,
-                        "unit": panel.get_latest().unit if panel.get_latest() else None,
-                    },
-                    "average": panel.get_average(),
-                    "data_points": len(panel.metrics)
-                }
-                for panel_id, panel in self._panels.items()
-            },
-            "alerts": self.get_alerts(5),
-            "alert_count": len(self._alerts)
-        }
-    
-    def export_html(self) -> str:
-        """导出 HTML 看板"""
-        data = self.get_dashboard_data()
-        
-        html = f"""
-<!DOCTYPE html>
-<html>
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-    <title>ComfyUI Harness 监控看板</title>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Harness Control Panel</title>
     <style>
-        body {{
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background: #f5f5f5;
-        }}
-        .header {{
-            background: #333;
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }}
-        .panel {{
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        .panel-title {{
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #333;
-        }}
-        .metric {{
-            display: inline-block;
-            margin: 10px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            min-width: 150px;
-        }}
-        .metric-value {{
-            font-size: 24px;
-            font-weight: bold;
-            color: #007bff;
-        }}
-        .metric-label {{
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }}
-        .alert {{
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 4px;
-            padding: 10px;
-            margin: 5px 0;
-        }}
-        .alert-critical {{
-            background: #f8d7da;
-            border-color: #dc3545;
-        }}
-        .status {{
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }}
-        .status-enabled {{
-            background: #d4edda;
-            color: #155724;
-        }}
-        .status-disabled {{
-            background: #f8d7da;
-            color: #721c24;
-        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; }}
+        .header {{ background: rgba(255,255,255,0.05); padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }}
+        .header h1 {{ font-size: 24px; font-weight: 600; }}
+        .header p {{ color: #888; margin-top: 5px; }}
+        .container {{ padding: 20px; max-width: 1400px; margin: 0 auto; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+        .stat-card {{ background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); }}
+        .stat-card.success {{ border-color: #00ff88; }}
+        .stat-card.warning {{ border-color: #ffaa00; }}
+        .stat-card.danger {{ border-color: #ff4444; }}
+        .stat-label {{ color: #888; font-size: 14px; }}
+        .stat-value {{ font-size: 32px; font-weight: 700; margin: 10px 0; }}
+        .stat-unit {{ color: #888; font-size: 14px; }}
+        .panels-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }}
+        .panel {{ background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); }}
+        .panel-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }}
+        .panel-title {{ font-size: 16px; font-weight: 600; }}
+        .panel-status {{ padding: 4px 12px; border-radius: 20px; font-size: 12px; }}
+        .panel-status.online {{ background: rgba(0,255,136,0.2); color: #00ff88; }}
+        .panel-status.offline {{ background: rgba(255,68,68,0.2); color: #ff4444; }}
+        .metrics-list {{ max-height: 300px; overflow-y: auto; }}
+        .metric-row {{ display: flex; justify-content: space-between; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; }}
+        .metric-name {{ color: #aaa; }}
+        .metric-value {{ font-weight: 600; }}
+        .alert {{ background: rgba(255,68,68,0.1); border-left: 3px solid #ff4444; padding: 10px; margin-bottom: 8px; }}
+        .btn {{ padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; }}
+        .btn-primary {{ background: linear-gradient(135deg, #00ff88, #00cc6a); color: #000; }}
+        .btn-danger {{ background: linear-gradient(135deg, #ff4444, #cc3333); color: #fff; }}
+        .btn-secondary {{ background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }}
+        .api-section {{ background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin-top: 20px; }}
+        pre {{ background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px; }}
+        .status-dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }}
+        .status-dot.green {{ background: #00ff88; box-shadow: 0 0 10px #00ff88; }}
+        .status-dot.red {{ background: #ff4444; }}
+        .status-dot.yellow {{ background: #ffaa00; }}
+        @keyframes pulse {{ 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }}
+        .status-dot.green {{ animation: pulse 2s infinite; }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>ComfyUI Harness 监控看板</h1>
-        <span class="status {'status-enabled' if data['enabled'] else 'status-disabled'}">
-            {'运行中' if data['enabled'] else '已停止'}
-        </span>
-        <span style="margin-left: 20px; color: #ccc;">
-            更新时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(data['timestamp']))}
-        </span>
+        <h1><span class="status-dot green"></span> ComfyUI Harness Control Panel</h1>
+        <p>Execution Engine with Fuse Box Protection | Type Safety | Observability | Resource Management | Self-Evolution</p>
     </div>
-"""
-        
-        # 面板
-        for panel_id, panel_data in data['panels'].items():
-            html += f"""
-    <div class="panel">
-        <div class="panel-title">{panel_data['title']}</div>
-        <div class="metric">
-            <div class="metric-value">{panel_data['latest']['value']:.2f if panel_data['latest']['value'] else 'N/A'}</div>
-            <div class="metric-label">当前值 {panel_data['latest']['unit'] or ''}</div>
-        </div>
-        <div class="metric">
-            <div class="metric-value">{panel_data['average']:.2f}</div>
-            <div class="metric-label">平均值</div>
-        </div>
-        <div class="metric">
-            <div class="metric-value">{panel_data['data_points']}</div>
-            <div class="metric-label">数据点</div>
-        </div>
-    </div>
-"""
-        
-        # 告警
-        if data['alerts']:
-            html += """
-    <div class="panel">
-        <div class="panel-title">最近告警</div>
-"""
-            for alert in data['alerts']:
-                html += f"""
-        <div class="alert {'alert-critical' if alert['value'] > alert['threshold'] * 1.5 else ''}">
-            <strong>{alert['metric_name']}</strong>: {alert['message']}
-            <br><small>{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(alert['timestamp']))}</small>
-        </div>
-"""
-            html += "    </div>"
-        
-        html += """
-</body>
-</html>
-"""
-        
-        return html
     
-    def save_html(self, filepath: str):
-        """保存 HTML 看板到文件"""
-        html = self.export_html()
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(html)
+    <div class="container">
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-label">Harness Status</div>
+                <div class="stat-value" id="harness-status">Enabled</div>
+                <div class="stat-unit">All modules active</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Modules</div>
+                <div class="stat-value" id="active-modules">6</div>
+                <div class="stat-unit">of 6 available</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">API Status</div>
+                <div class="stat-value" id="api-status">Online</div>
+                <div class="stat-unit">Ready for requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Alerts</div>
+                <div class="stat-value" id="alert-count">0</div>
+                <div class="stat-unit">No active alerts</div>
+            </div>
+        </div>
+
+        <div class="panels-grid" id="panels-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Execution Engine</span>
+                    <span class="panel-status online">Active</span>
+                </div>
+                <div class="metrics-list" id="execution-metrics">
+                    <div class="metric-row">
+                        <span class="metric-name">Fuse Box</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Fallback</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Retry</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Type System</span>
+                    <span class="panel-status online">Active</span>
+                </div>
+                <div class="metrics-list" id="types-metrics">
+                    <div class="metric-row">
+                        <span class="metric-name">Contract Validation</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Static Checking</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Registry</span>
+                        <span class="metric-value">✓ Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Observability</span>
+                    <span class="panel-status online">Active</span>
+                </div>
+                <div class="metrics-list" id="observability-metrics">
+                    <div class="metric-row">
+                        <span class="metric-name">Tracing</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Recorder</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Telemetry</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Resource Management</span>
+                    <span class="panel-status online">Active</span>
+                </div>
+                <div class="metrics-list" id="resource-metrics">
+                    <div class="metric-row">
+                        <span class="metric-name">Estimator</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Scheduler</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Adaptive Precision</span>
+                        <span class="metric-value">✓ Enabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Self-Evolution</span>
+                    <span class="panel-status offline">Disabled</span>
+                </div>
+                <div class="metrics-list" id="evolution-metrics">
+                    <div class="metric-row">
+                        <span class="metric-name">Versioning</span>
+                        <span class="metric-value">✗ Disabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">Canary Deploy</span>
+                        <span class="metric-value">✗ Disabled</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-name">AI Referee</span>
+                        <span class="metric-value">✗ Disabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Alerts</span>
+                    <span class="panel-status" id="alerts-status">Normal</span>
+                </div>
+                <div class="metrics-list" id="alerts-list">
+                    <div style="text-align: center; color: #666; padding: 20px;">No active alerts</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h3 style="margin-bottom: 15px;">API Endpoints</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">Status</div>
+                    <code style="color: #00ff88;">GET /api/harness/status</code>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">Metrics</div>
+                    <code style="color: #00ff88;">GET /api/harness/metrics</code>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">Enable</div>
+                    <code style="color: #ffaa00;">POST /api/harness/enable</code>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">Canary Start</div>
+                    <code style="color: #ffaa00;">POST /api/harness/canary/start</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/harness/status');
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                document.getElementById('harness-status').textContent = 'Offline';
+                document.querySelector('.stat-card.success').className = 'stat-card danger';
+            }
+        }
+
+        function updateDashboard(data) {
+            if (data.enabled) {
+                document.getElementById('harness-status').textContent = 'Enabled';
+            } else {
+                document.getElementById('harness-status').textContent = 'Disabled';
+                document.querySelector('.stat-card.success').className = 'stat-card warning';
+            }
+            
+            const components = data.components || {};
+            const activeCount = Object.values(components).filter(v => v).length;
+            document.getElementById('active-modules').textContent = activeCount;
+            
+            if (components.fuse_box === false) {
+                document.querySelector('#execution-metrics .metric-row:nth-child(1) .metric-value').textContent = '✗ Disabled';
+            }
+            if (components.fallback === false) {
+                document.querySelector('#execution-metrics .metric-row:nth-child(2) .metric-value').textContent = '✗ Disabled';
+            }
+            if (components.retry === false) {
+                document.querySelector('#execution-metrics .metric-row:nth-child(3) .metric-value').textContent = '✗ Disabled';
+            }
+            
+            if (components.evolution) {
+                document.querySelector('#evolution-metrics .panel-status').textContent = 'Active';
+                document.querySelector('#evolution-metrics .panel-status').className = 'panel-status online';
+                document.querySelectorAll('#evolution-metrics .metric-value').forEach(el => el.textContent = '✓ Enabled');
+            }
+        }
+
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/harness/metrics');
+                const data = await response.json();
+                console.log('Metrics:', data);
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+            }
+        }
+
+        setInterval(fetchStatus, 5000);
+        fetchStatus();
+        fetchMetrics();
+    </script>
+</body>
+</html>"""
+    
+    return html
 
 
-# 全局看板实例
+def export_html() -> str:
+    """导出 HTML"""
+    return generate_dashboard_html()
+
+
+def save_html(filepath: str):
+    """保存到文件"""
+    html = generate_dashboard_html()
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+
 dashboard = MonitoringDashboard()

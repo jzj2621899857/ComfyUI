@@ -21,8 +21,47 @@ log_error() {
 
 check_command() {
     if ! command -v "$1" &> /dev/null; then
-        log_error "Command $1 not found. Please install it first."
-        exit 1
+        local install_cmd=""
+        if command -v apt-get &> /dev/null; then
+            install_cmd="sudo apt-get update && sudo apt-get install -y $2"
+        elif command -v yum &> /dev/null; then
+            install_cmd="sudo yum install -y $2"
+        elif command -v dnf &> /dev/null; then
+            install_cmd="sudo dnf install -y $2"
+        elif command -v pacman &> /dev/null; then
+            install_cmd="sudo pacman -S --noconfirm $2"
+        elif command -v apk &> /dev/null; then
+            install_cmd="sudo apk add --no-cache $2"
+        fi
+        
+        if [ -n "$install_cmd" ]; then
+            log_warn "Command $1 not found. Attempting to install..."
+            eval "$install_cmd" || {
+                log_error "Failed to install $1. Please install $2 manually."
+                exit 1
+            }
+        else
+            log_error "Command $1 not found. Please install $2 first."
+            exit 1
+        fi
+    fi
+}
+
+install_pkg_if_missing() {
+    local pkg="$1"
+    if ! command -v "$pkg" &> /dev/null; then
+        log_warn "Installing $pkg..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y "$pkg"
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y "$pkg"
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y "$pkg"
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -S --noconfirm "$pkg"
+        elif command -v apk &> /dev/null; then
+            sudo apk add --no-cache "$pkg"
+        fi
     fi
 }
 
@@ -34,9 +73,30 @@ find_pip() {
     elif python3 -m pip --version &> /dev/null; then
         echo "python3 -m pip"
     else
-        log_error "pip not found. Please install python3-pip first."
-        log_info "Try: sudo apt install python3-pip"
-        exit 1
+        log_warn "pip not found. Attempting to install python3-pip..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y python3-pip
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y python3-pip
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y python3-pip
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -S --noconfirm python-pip
+        elif command -v apk &> /dev/null; then
+            sudo apk add --no-cache py3-pip
+        else
+            log_error "Cannot auto-install pip. Please install python3-pip manually."
+            exit 1
+        fi
+        
+        if command -v pip3 &> /dev/null; then
+            echo "pip3"
+        elif command -v pip &> /dev/null; then
+            echo "pip"
+        else
+            log_error "Failed to install pip."
+            exit 1
+        fi
     fi
 }
 
@@ -45,8 +105,12 @@ cd "$PROJECT_DIR"
 
 log_info "Starting deployment in $PROJECT_DIR"
 
-check_command git
-check_command python3
+check_command git git
+check_command python3 python3
+
+if ! command -v virtualenv &> /dev/null && ! command -v python3 -m venv &> /dev/null; then
+    install_pkg_if_missing python3-venv
+fi
 
 PIP_CMD=$(find_pip)
 log_info "Using pip: $PIP_CMD"

@@ -292,14 +292,11 @@ def register_harness_routes(app):
             method = route_info.get("method", "GET")
             handler_func = route_info.get("handler")
             
-            async def make_handler(handler_func=handler_func):
-                async def handler(request):
-                    result = await handler_func(request)
-                    return web.json_response(result)
-                
-                return handler
+            async def handler(request, func=handler_func):
+                result = await func(request)
+                return web.json_response(result)
             
-            app.router.add_route(method, path, make_handler())
+            app.router.add_route(method, path, handler)
             logger.info(f"注册 Harness 路由: {method} {path}")
         
         logger.info("Harness API 路由注册完成")
